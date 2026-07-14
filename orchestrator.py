@@ -1,4 +1,5 @@
 from human_approval import human_approval
+from prompt_loader import load_prompt
 
 from agents.requirements import RequirementsAgent
 from agents.architecture import ArchitectureAgent
@@ -6,6 +7,10 @@ from agents.frontend import FrontendAgent
 from agents.backend import BackendAgent
 from agents.integration import IntegrationAgent
 from agents.qa import QAAgent
+
+
+MAX_RETRIES = 2
+
 
 class Orchestrator:
 
@@ -18,19 +23,23 @@ class Orchestrator:
         self.integration_agent = IntegrationAgent()
         self.qa_agent = QAAgent()
 
-    def run(self, project_brief):
+    def run(self, project_brief: str):
 
         print("\n========== AgentForge ==========\n")
+
 
         # Requirements
         feedback = None
 
         while True:
 
-            requirements = self.requirements_agent.run(
-                project_brief,
-                feedback
+            prompt = load_prompt(
+                "requirements_prompt",
+                PROJECT_BRIEF=project_brief,
+                FEEDBACK=feedback
             )
+
+            requirements = self.requirements_agent.run(prompt)
 
             approved, feedback = human_approval(
                 "Requirements",
@@ -40,15 +49,21 @@ class Orchestrator:
             if approved:
                 break
 
+        print("\nRequirements Approved.\n")
+
+
         # Architecture
         feedback = None
 
         while True:
 
-            architecture = self.architecture_agent.run(
-                requirements,
-                feedback
+            prompt = load_prompt(
+                "architecture_prompt",
+                REQUIREMENTS=requirements,
+                FEEDBACK=feedback
             )
+
+            architecture = self.architecture_agent.run(prompt)
 
             approved, feedback = human_approval(
                 "Architecture",
@@ -58,92 +73,156 @@ class Orchestrator:
             if approved:
                 break
 
+        print("\nArchitecture Approved.\n")
+
 
         # Generating frontend and backend
-        print("\nGenerating frontend...\n")
-
-        frontend = self.frontend_agent.run(
-            requirements,
-            architecture
+        frontend_prompt = load_prompt(
+            "frontend_prompt",
+            REQUIREMENTS=requirements,
+            ARCHITECTURE=architecture,
+            FEEDBACK=None
         )
 
-        print("\nGenerating backend...\n")
-
-        backend = self.backend_agent.run(
-            requirements,
-            architecture
+        backend_prompt = load_prompt(
+            "backend_prompt",
+            REQUIREMENTS=requirements,
+            ARCHITECTURE=architecture,
+            FEEDBACK=None
         )
 
-        # Integration Loop
-        while True:
+        print("Generating frontend...")
+        frontend = self.frontend_agent.run(frontend_prompt)
 
-            integration = self.integration_agent.run(
-                frontend,
-                backend
+        print("Generating backend...")
+        backend = self.backend_agent.run(backend_prompt)
+
+
+        # Integration loop
+        for attempt in range(MAX_RETRIES):
+
+            integration_prompt = load_prompt(
+                "integration_prompt",
+                FRONTEND_OUTPUT=frontend,
+                BACKEND_OUTPUT=backend
             )
 
-            if integration["passed"]:
+            integration = self.integration_agent.run(integration_prompt)
+
+            if integration.get("passed", False):
+
                 print("\nIntegration Passed.\n")
                 break
 
             print("\nIntegration Failed.\n")
 
-            for issue in integration["issues"]:
-                print(
-                    f'{issue["agent"]}: {issue["description"]}'
-                )
+            for issue in integration.get("issues", []):
 
-                if issue["agent"] == "frontend":
-                    frontend = self.frontend_agent.run(
-                        requirements,
-                        architecture,
-                        feedback=issue["description"]
+                agent = issue["agent"].lower()
+                description = issue["description"]
+
+                print(f"[{agent}] {description}")
+
+                if agent == "frontend":
+
+                    frontend_prompt = load_prompt(
+                        "frontend_prompt",
+                        REQUIREMENTS=requirements,
+                        ARCHITECTURE=architecture,
+                        FEEDBACK=description
                     )
 
-                elif issue["agent"] == "backend":
-                    backend = self.backend_agent.run(
-                        requirements,
-                        architecture,
-                        feedback=issue["description"]
+                    frontend = self.frontend_agent.run(frontend_prompt)
+
+                elif agent == "backend":
+
+                    backend_prompt = load_prompt(
+                        "backend_prompt",
+                        REQUIREMENTS=requirements,
+                        ARCHITECTURE=architecture,
+                        FEEDBACK=description
                     )
 
-        # QA Loop
-        while True:
+                    backend = self.backend_agent.run(backend_prompt)
 
-            qa = self.qa_agent.run(
-                frontend,
-                backend
+        else:
+
+            print("\nIntegration failed after maximum retries.")
+            return
+
+
+        # QA loop
+        for attempt in range(MAX_RETRIES):
+
+            qa_prompt = load_prompt(
+                "qa_prompt",
+                FRONTEND_OUTPUT=frontend,
+                BACKEND_OUTPUT=backend
             )
 
-            if qa["passed"]:
+            qa = self.qa_agent.run(qa_prompt)
+
+            if qa.get("passed", False):
+
                 print("\nQA Passed.\n")
                 break
 
             print("\nQA Failed.\n")
 
-            for issue in qa["issues"]:
-                print(
-                    f'{issue["agent"]}: {issue["description"]}'
-                )
+            for issue in qa.get("issues", []):
 
-                if issue["agent"] == "frontend":
-                    frontend = self.frontend_agent.run(
-                        requirements,
-                        architecture,
-                        feedback=issue["description"]
+                agent = issue["agent"].lower()
+                description = issue["description"]
+
+                print(f"[{agent}] {description}")
+
+                if agent == "frontend":
+
+                    frontend_prompt = load_prompt(
+                        "frontend_prompt",
+                        REQUIREMENTS=requirements,
+                        ARCHITECTURE=architecture,
+                        FEEDBACK=description
                     )
 
-                elif issue["agent"] == "backend":
-                    backend = self.backend_agent.run(
-                        requirements,
-                        architecture,
-                        feedback=issue["description"]
+                    frontend = self.frontend_agent.run(frontend_prompt)
+
+                elif agent == "backend":
+
+                    backend_prompt = load_prompt(
+                        "backend_prompt",
+                        REQUIREMENTS=requirements,
+                        ARCHITECTURE=architecture,
+                        FEEDBACK=description
                     )
 
-        # Final approval
-        human_approval(
+                    backend = self.backend_agent.run(backend_prompt)
+
+        else:
+
+            print("\nQA failed after maximum retries.")
+            return
+
+
+        # Human approval
+        approved, _ = human_approval(
             "Final Review",
-            "The project has passed Integration and QA."
+            {
+                "requirements": requirements,
+                "architecture": architecture,
+                "frontend": frontend,
+                "backend": backend
+            }
         )
 
-        print("\nWorkflow Complete.\n")
+        if approved:
+            print("\nProject Approved!\n")
+        else:
+            print("\nProject Rejected by Human.\n")
+
+        return {
+            "requirements": requirements,
+            "architecture": architecture,
+            "frontend": frontend,
+            "backend": backend
+        }
