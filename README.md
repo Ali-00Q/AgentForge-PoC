@@ -22,31 +22,26 @@ This repository contains the proof of concept developed to validate the core wor
 ## Workflow
 
 ```text
-User
-  │
-  ▼
+   	 User
+  	  │
 Requirements Agent
-  │
+  	  │
 Human Approval
-  │
-  ▼
+  	  │
 Architecture Agent
-  │
+  	  │
 Human Approval
-  │
- ┌─────────────┐
- ▼             ▼
-Frontend    Backend
+  	  │
+  ┌─────────────┐
+Frontend    	Backend
   │             │
   └──────┬──────┘
-         ▼
- Integration
          │
-         ▼
-      QA Review
+    Integration
          │
-         ▼
- Final Approval
+     QA Review
+         │
+   Final Approval
 ```
 
 ---
@@ -101,9 +96,9 @@ Create a `.env` file.
 ```env
 GEMINI_API_KEY=YOUR_API_KEY
 ```
-1. Open this url: https://ai.google.dev/gemini-api/docs/api-key
-2. Create your API key
-3. Paste the key in the .env file
+1. open this url: https://ai.google.dev/gemini-api/docs/api-key
+2. create your API key
+3. paste it in the .env file
 ---
 
 ## Usage
