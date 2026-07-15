@@ -1,7 +1,5 @@
 # AgentForge Proof of Concept
 
-# Proof of Concept
-
 > Proof of Concept for **AgentForge**, an AI-driven multi-agent software engineering system.
 
 This repository contains the proof of concept developed to validate the core workflow of AgentForge. It demonstrates how multiple specialized AI agents can collaboratively generate a simple full-stack application from a natural language description through coordinated task execution, validation, and human approval.
